@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Bản đồ khuôn viên - Điều khiển Dưới</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 5px;
+      box-sizing: border-box;
+      background-color: #f0f0f0;
+      overscroll-behavior: none; 
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Bỏ container điều khiển trên cùng nếu không còn nút nào */
+    /* .controls-container { ... } */
+
+    .map-container {
+      width: 100%;
+      max-width: 900px;
+      border: 1px solid #007bff;
+      border-radius: 8px;
+      overflow: hidden;
+      background-color: white;
+      flex-grow: 1; 
+      display: flex; 
+      margin-bottom: 8px; /* Khoảng cách với info-panel nếu nó ở dưới */
+    }
+
+    svg#campusMap {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: grab;
+      user-select: none;
+      touch-action: none;
+    }
+    svg#campusMap.grabbing { cursor: grabbing; }
+
+    rect.building-rect {
+      fill: transparent;
+      pointer-events: all;
+      stroke: rgba(255, 0, 0, 0.6);
+      stroke-width: 1px; 
+    }
+
+    .divider-line {
+      stroke: rgba(128, 128, 128, 0.4);
+      stroke-width: 1px;
+      stroke-dasharray: 3,3;
+      pointer-events: none;
+    }
+    
+    .info-panel {
+      width: 100%;
+      max-width: 900px;
+      padding: 10px;
+      background: #fff;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      flex-shrink: 0;
+      max-height: 20vh; /* Điều chỉnh chiều cao info panel */
+      overflow-y: auto;
+      margin-bottom: 8px; /* Khoảng cách với bottom-controls */
+    }
+    .info-panel h3 { margin-top: 0; color: #007bff; font-size: 1.1em; }
+    .info-panel p { margin: 5px 0 0; line-height: 1.4; color: #333; font-size: 0.9em; }
+    .placeholder { color: #999; font-style: italic; }
+
+    .bottom-controls-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px; /* Khoảng cách giữa lưới quadrant và nút reset */
+      padding: 8px;
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 -1px 3px rgba(0,0,0,0.05); /* Bóng nhẹ phía trên */
+      width: 100%;
+      max-width: 900px;
+      box-sizing: border-box;
+      flex-shrink: 0;
+    }
+
+    .quadrant-grid-controls {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr); /* 2 cột bằng nhau */
+      gap: 6px; /* Khoảng cách giữa các nút quadrant */
+      width: 100%;
+      max-width: 300px; /* Giới hạn chiều rộng của lưới nút */
+    }
+
+    .quadrant-grid-controls button,
+    .bottom-controls-container button.reset-zoom {
+      padding: 8px 10px; /* Tăng padding một chút */
+      font-size: 13px;
+      cursor: pointer;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      transition: background-color 0.2s ease;
+      width: 100%; /* Nút chiếm toàn bộ chiều rộng grid cell */
+    }
+    .quadrant-grid-controls button:hover,
+    .bottom-controls-container button.reset-zoom:hover {
+      background-color: #0056b3;
+    }
+    .bottom-controls-container button.reset-zoom {
+        background-color: #6c757d;
+        max-width: 300px; /* Đồng bộ chiều rộng với lưới quadrant */
+    }
+    .bottom-controls-container button.reset-zoom:hover {
+        background-color: #545b62;
+    }
+
+  </style>
+</head>
+<body>
+
+  <div class="map-container">
+    <svg id="campusMap" viewBox="0 0 970 910" xmlns="http://www.w3.org/2000/svg">
+      <image href="anh-nen-goc.jpg" x="0" y="0" width="970" height="910" />
+      <line class="divider-line" x1="485" y1="0" x2="485" y2="910" />
+      <line class="divider-line" x1="0" y1="455" x2="970" y2="455" />
+      
+      <rect class="building-rect" id="toaC2" x="140" y="320" width="40" height="120" />
+      <rect class="building-rect" id="toaC9" x="60" y="450" width="130" height="30" />
+      <rect class="building-rect" id="toaHoithao" x="140" y="270" width="40" height="40" />
+      <rect class="building-rect" id="toaC1" x="150" y="200" width="270" height="60" />
+      <rect class="building-rect" id="toaC3" x="400" y="280" width="100" height="30" />
+      <rect class="building-rect" id="toaC4" x="395" y="350" width="105" height="30" />
+      <rect class="building-rect" id="toaC5" x="395" y="420" width="105" height="30" />
+      <rect class="building-rect" id="toaC10" x="397" y="480" width="100" height="30" />
+      <rect class="building-rect" id="toaC7" x="540" y="410" width="100" height="100" />
+      <rect class="building-rect" id="toaThuvien" x="440" y="570" width="90" height="120" />
+      <rect class="building-rect" id="toaHotien" x="250" y="690" width="150" height="110" />
+      <rect class="building-rect" id="toaD6" x="100" y="680" width="120" height="30" />
+      <rect class="building-rect" id="toaD8" x="100" y="750" width="120" height="30" />
+      <rect class="building-rect" id="toaD2a" x="80" y="560" width="70" height="50" />
+      <rect class="building-rect" id="toaD2b" x="160" y="560" width="70" height="50" />
+      <rect class="building-rect" id="toaVietduc" x="240" y="560" width="70" height="50" />
+      <rect class="building-rect" id="toaD2d" x="320" y="560" width="80" height="50" />
+      <rect class="building-rect" id="toaC3b" x="540" y="230" width="90" height="100" />
+      <rect class="building-rect" id="toaC1b" x="460" y="210" width="50" height="50" />
+      <rect class="building-rect" id="toaD3" x="580" y="560" width="70" height="40" />
+      <rect class="building-rect" id="toaD5" x="580" y="620" width="70" height="40" />
+      <rect class="building-rect" id="toaD35" x="660" y="560" width="40" height="100" />
+      <rect class="building-rect" id="toaB6" x="750" y="300" width="100" height="30" />
+      <rect class="building-rect" id="toaKtx" x="750" y="345" width="100" height="65" />
+      <rect class="building-rect" id="toaB7" x="750" y="420" width="100" height="30" />
+      <rect class="building-rect" id="toaB8" x="750" y="470" width="110" height="30" />
+      <rect class="building-rect" id="toaB5" x="870" y="310" width="80" height="40" />
+      <rect class="building-rect" id="toaB9" x="870" y="370" width="80" height="40" />
+      <rect class="building-rect" id="toaB1" x="780" y="565" width="130" height="130" />
+      <rect class="building-rect" id="toaD4" x="20" y="695" width="50" height="45" />
+      <rect class="building-rect" id="toaVuonhoa" x="230" y="280" width="110" height="140" />
+      <rect class="building-rect" id="toaD7" x="610" y="670" width="60" height="60" />
+    </svg>
+  </div>
+
+  <div class="info-panel" id="infoPanel">
+    <h3>Thông tin tòa nhà</h3>
+    <p class="placeholder">Chạm vào tòa nhà để xem chi tiết.</p>
+  </div>
+
+  <div class="bottom-controls-container">
+    <div class="quadrant-grid-controls">
+      <button id="zoomQ1Bottom">G1</button> <button id="zoomQ2Bottom">G2</button> <button id="zoomQ3Bottom">G3</button> <button id="zoomQ4Bottom">G4</button> </div>
+    <button id="resetZoomBtnBottom" class="reset-zoom">Xem Toàn Bộ</button>
+  </div>
+
+  <script>
+    const infoPanel = document.getElementById('infoPanel');
+    const campusMap = document.getElementById('campusMap');
+
+    const SVG_ORIGINAL_WIDTH = 970;
+    const SVG_ORIGINAL_HEIGHT = 910;
+
+    let currentViewBox = { x: 0, y: 0, width: SVG_ORIGINAL_WIDTH, height: SVG_ORIGINAL_HEIGHT };
+    const ZOOM_FACTOR = 1.2; 
+    const MIN_ZOOM_WIDTH = 30; 
+    const MAX_ZOOM_WIDTH = SVG_ORIGINAL_WIDTH * 3;
+
+    let isPointerDown = false;
+    let pointerStartCoords = { x: 0, y: 0 };
+    let viewBoxOnPointerDown = { x: 0, y: 0 };
+    let initialPinchDistance = 0;
+    let isPinching = false;
+    let tapStart = { x:0, y:0, time:0 };
+    const TAP_THRESHOLD_MS = 250;
+    const TAP_MOVE_THRESHOLD_PX = 10;
+
+    const halfWidth = SVG_ORIGINAL_WIDTH / 2;
+    const halfHeight = SVG_ORIGINAL_HEIGHT / 2;
+    const quadrantViewBoxes = {
+      q1: { x: 0, y: 0, width: halfWidth, height: halfHeight },
+      q2: { x: halfWidth, y: 0, width: halfWidth, height: halfHeight },
+      q3: { x: 0, y: halfHeight, width: halfWidth, height: halfHeight },
+      q4: { x: halfWidth, y: halfHeight, width: halfWidth, height: halfHeight }
+    };
+
+    function setMapViewBox(vb) {
+      currentViewBox = { ...vb };
+      currentViewBox.x = Math.max(-SVG_ORIGINAL_WIDTH * 0.5, Math.min(currentViewBox.x, SVG_ORIGINAL_WIDTH * 1.5 - currentViewBox.width));
+      currentViewBox.y = Math.max(-SVG_ORIGINAL_HEIGHT * 0.5, Math.min(currentViewBox.y, SVG_ORIGINAL_HEIGHT * 1.5 - currentViewBox.height));
+      campusMap.setAttribute('viewBox', `${currentViewBox.x} ${currentViewBox.y} ${currentViewBox.width} ${currentViewBox.height}`);
+    }
+
+    function screenToSVGCoords(screenX, screenY) {
+        const pt = campusMap.createSVGPoint();
+        pt.x = screenX;
+        pt.y = screenY;
+        const CTM = campusMap.getScreenCTM();
+        return CTM ? pt.matrixTransform(CTM.inverse()) : null;
+    }
+
+    function zoomViewBox(zoomRatio, pivotSVG) {
+        let newWidth = currentViewBox.width * zoomRatio;
+        let newHeight = currentViewBox.height * zoomRatio;
+
+        if (newWidth < MIN_ZOOM_WIDTH) {
+            newWidth = MIN_ZOOM_WIDTH;
+            newHeight = MIN_ZOOM_WIDTH * (SVG_ORIGINAL_HEIGHT / SVG_ORIGINAL_WIDTH);
+            if (zoomRatio > 1) return;
+        }
+        if (newWidth > MAX_ZOOM_WIDTH) {
+            newWidth = MAX_ZOOM_WIDTH;
+            newHeight = MAX_ZOOM_WIDTH * (SVG_ORIGINAL_HEIGHT / SVG_ORIGINAL_WIDTH);
+            if (zoomRatio < 1) return;
+        }
+        
+        let newX, newY;
+        if (pivotSVG) {
+            newX = pivotSVG.x - (pivotSVG.x - currentViewBox.x) * (newWidth / currentViewBox.width);
+            newY = pivotSVG.y - (pivotSVG.y - currentViewBox.y) * (newHeight / currentViewBox.height);
+        } else {
+            newX = currentViewBox.x + (currentViewBox.width - newWidth) / 2;
+            newY = currentViewBox.y + (currentViewBox.height - newHeight) / 2;
+        }
+        setMapViewBox({ x: newX, y: newY, width: newWidth, height: newHeight });
+    }
+    
+    // --- Mouse Event Handlers (Giữ nguyên) ---
+    campusMap.addEventListener('mousedown', (event) => {
+        isPointerDown = true;
+        pointerStartCoords = { x: event.clientX, y: event.clientY };
+        viewBoxOnPointerDown = { x: currentViewBox.x, y: currentViewBox.y };
+        campusMap.classList.add('grabbing');
+        tapStart = { x: event.clientX, y: event.clientY, time: Date.now() };
+    });
+    campusMap.addEventListener('mousemove', (event) => {
+        if (!isPointerDown || isPinching) return;
+        const dxScreen = event.clientX - pointerStartCoords.x;
+        const dyScreen = event.clientY - pointerStartCoords.y;
+        const clientRect = campusMap.getBoundingClientRect();
+        if (clientRect.width === 0 || clientRect.height === 0) return;
+        const scaleX = currentViewBox.width / clientRect.width;
+        const scaleY = currentViewBox.height / clientRect.height;
+        const newX = viewBoxOnPointerDown.x - dxScreen * scaleX;
+        const newY = viewBoxOnPointerDown.y - dyScreen * scaleY;
+        setMapViewBox({ x: newX, y: newY, width: currentViewBox.width, height: currentViewBox.height });
+    });
+    function stopPointerInteractionsMouse() { // Đổi tên để tránh xung đột tiềm ẩn
+        if (isPointerDown && !isPinching) { // Chỉ reset nếu không phải là kết thúc của pinch
+            isPointerDown = false;
+            campusMap.classList.remove('grabbing');
+        }
+    }
+    campusMap.addEventListener('mouseup', stopPointerInteractionsMouse);
+    campusMap.addEventListener('mouseleave', stopPointerInteractionsMouse);
+    window.addEventListener('blur', stopPointerInteractionsMouse); // Dùng hàm riêng cho mouse
+
+    campusMap.addEventListener('wheel', (event) => {
+      event.preventDefault();
+      const pivot = screenToSVGCoords(event.clientX, event.clientY);
+      if (!pivot) return;
+      const zoomRatio = event.deltaY < 0 ? (1 / ZOOM_FACTOR) : ZOOM_FACTOR;
+      zoomViewBox(zoomRatio, pivot);
+    });
+
+    // --- Touch Event Handlers (Giữ nguyên) ---
+    function getTouchDistance(touch1, touch2) {
+        const dx = touch1.clientX - touch2.clientX;
+        const dy = touch1.clientY - touch2.clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+    function getTouchMidpoint(touch1, touch2) {
+        return { x: (touch1.clientX + touch2.clientX) / 2, y: (touch1.clientY + touch2.clientY) / 2 };
+    }
+    campusMap.addEventListener('touchstart', (event) => {
+        event.preventDefault();
+        isPointerDown = true; 
+        campusMap.classList.add('grabbing');
+        if (event.touches.length === 1) {
+            const touch = event.touches[0];
+            pointerStartCoords = { x: touch.clientX, y: touch.clientY };
+            viewBoxOnPointerDown = { x: currentViewBox.x, y: currentViewBox.y };
+            tapStart = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+            isPinching = false; 
+        } else if (event.touches.length === 2) {
+            isPinching = true;
+            initialPinchDistance = getTouchDistance(event.touches[0], event.touches[1]);
+            viewBoxOnPointerDown = { ...currentViewBox }; 
+        }
+    }, { passive: false });
+    campusMap.addEventListener('touchmove', (event) => {
+        event.preventDefault();
+        if (!isPointerDown) return;
+        if (isPinching && event.touches.length === 2) {
+            const currentPinchDistance = getTouchDistance(event.touches[0], event.touches[1]);
+            if (initialPinchDistance === 0) return;
+            const zoomRatio = currentPinchDistance / initialPinchDistance;
+            const screenMidpoint = getTouchMidpoint(event.touches[0], event.touches[1]);
+            const svgMidpoint = screenToSVGCoords(screenMidpoint.x, screenMidpoint.y);
+            if (svgMidpoint) {
+                const newWidth = viewBoxOnPointerDown.width / zoomRatio;
+                const newHeight = viewBoxOnPointerDown.height / zoomRatio;
+                let finalWidth = Math.max(MIN_ZOOM_WIDTH, Math.min(newWidth, MAX_ZOOM_WIDTH));
+                let finalHeight = finalWidth * (SVG_ORIGINAL_HEIGHT / SVG_ORIGINAL_WIDTH);
+                let newViewBoxX = svgMidpoint.x - (svgMidpoint.x - viewBoxOnPointerDown.x) * (finalWidth / viewBoxOnPointerDown.width);
+                let newViewBoxY = svgMidpoint.y - (svgMidpoint.y - viewBoxOnPointerDown.y) * (finalHeight / viewBoxOnPointerDown.height);
+                setMapViewBox({x: newViewBoxX, y: newViewBoxY, width: finalWidth, height: finalHeight});
+            }
+        } else if (!isPinching && event.touches.length === 1) {
+            const touch = event.touches[0];
+            const dxScreen = touch.clientX - pointerStartCoords.x;
+            const dyScreen = touch.clientY - pointerStartCoords.y;
+            const clientRect = campusMap.getBoundingClientRect();
+            if (clientRect.width === 0 || clientRect.height === 0) return;
+            const scaleX = currentViewBox.width / clientRect.width;
+            const scaleY = currentViewBox.height / clientRect.height;
+            const newX = viewBoxOnPointerDown.x - dxScreen * scaleX;
+            const newY = viewBoxOnPointerDown.y - dyScreen * scaleY;
+            setMapViewBox({ x: newX, y: newY, width: currentViewBox.width, height: currentViewBox.height });
+        }
+    }, { passive: false });
+    campusMap.addEventListener('touchend', (event) => {
+        if (!isPinching && event.changedTouches.length === 1 && isPointerDown) {
+            const touch = event.changedTouches[0];
+            const timeElapsed = Date.now() - tapStart.time;
+            const distMoved = Math.sqrt(Math.pow(touch.clientX - tapStart.x, 2) + Math.pow(touch.clientY - tapStart.y, 2));
+            if (timeElapsed < TAP_THRESHOLD_MS && distMoved < TAP_MOVE_THRESHOLD_PX) {
+                let targetElement = document.elementFromPoint(tapStart.x, tapStart.y);
+                if (targetElement && targetElement.closest && targetElement.closest('.building-rect')) { // Use closest
+                    targetElement = targetElement.closest('.building-rect');
+                    const buildingId = targetElement.id;
+                    if (buildingId && info[buildingId]) {
+                        displayBuildingInfo(info[buildingId], buildingId);
+                    }
+                }
+            }
+        }
+        if (event.touches.length < 2) isPinching = false;
+        if (event.touches.length === 0) {
+            if(isPointerDown) { // Chỉ reset nếu isPointerDown đang true
+               isPointerDown = false;
+               campusMap.classList.remove('grabbing');
+            }
+        }
+    });
+    campusMap.addEventListener('touchcancel', (event) => {
+        isPointerDown = false;
+        isPinching = false;
+        campusMap.classList.remove('grabbing');
+    });
+
+    // --- New Button Click Handlers (Dưới bản đồ) ---
+    document.getElementById('zoomQ1Bottom').addEventListener('click', () => setMapViewBox(quadrantViewBoxes.q1));
+    document.getElementById('zoomQ2Bottom').addEventListener('click', () => setMapViewBox(quadrantViewBoxes.q2));
+    document.getElementById('zoomQ3Bottom').addEventListener('click', () => setMapViewBox(quadrantViewBoxes.q3));
+    document.getElementById('zoomQ4Bottom').addEventListener('click', () => setMapViewBox(quadrantViewBoxes.q4));
+    document.getElementById('resetZoomBtnBottom').addEventListener('click', () => {
+      setMapViewBox({ x: 0, y: 0, width: SVG_ORIGINAL_WIDTH, height: SVG_ORIGINAL_HEIGHT });
+    });
+
+    // --- Building Info Display Logic (Giữ nguyên) ---
+    const info = {
+      toaC1: { name: "Tòa C1", detail: "Trung tâm hành chính và các phòng ban quản lý chính của trường." },
+      toaC2: { name: "Tòa C2", detail: "Gồm hội trường lớn, phòng thí nghiệm vật liệu, công nghệ thông tin." },
+      toaC7: { name: "Tòa C7", detail: "Viện Kinh tế & Quản lý, trung tâm đào tạo quản trị." },
+      toaB1: { name: "Tòa B1", detail: "Trường Hóa học và Khoa học Sự sống, các phòng thí nghiệm sinh học." },
+      toaKtx: { name: "Ký túc xá", detail: "Ký túc xá sinh viên với hơn 500 chỗ ở." },
+      toaC9: { name: "Tòa C9", detail: "Thông tin chi tiết về Tòa C9..." },
+      toaHoithao: { name: "Khu Hội thảo", detail: "Thông tin chi tiết về Khu Hội thảo..." },
+      toaC3: { name: "Tòa C3", detail: "Thông tin chi tiết về Tòa C3..." },
+      toaC4: { name: "Tòa C4", detail: "Thông tin chi tiết về Tòa C4..." },
+      toaC5: { name: "Tòa C5", detail: "Thông tin chi tiết về Tòa C5..." },
+      toaC10: { name: "Tòa C10", detail: "Thông tin chi tiết về Tòa C10..." },
+      toaThuvien: { name: "Thư viện", detail: "Thông tin chi tiết về Thư viện..." },
+      toaHotien: { name: "Hồ Tiền", detail: "Thông tin chi tiết về Hồ Tiền..." },
+      toaD6: { name: "Tòa D6", detail: "Thông tin chi tiết về Tòa D6..." },
+      toaD8: { name: "Tòa D8", detail: "Thông tin chi tiết về Tòa D8..." },
+      toaD2a: { name: "Tòa D2a", detail: "Thông tin chi tiết về Tòa D2a..." },
+      toaD2b: { name: "Tòa D2b", detail: "Thông tin chi tiết về Tòa D2b..." },
+      toaVietduc: { name: "Trung tâm Việt Đức", detail: "Thông tin chi tiết về Trung tâm Việt Đức..." },
+      toaD2d: { name: "Tòa D2d", detail: "Thông tin chi tiết về Tòa D2d..." },
+      toaC3b: { name: "Tòa C3b", detail: "Thông tin chi tiết về Tòa C3b..." },
+      toaC1b: { name: "Tòa C1b", detail: "Thông tin chi tiết về Tòa C1b..." },
+      toaD3: { name: "Tòa D3", detail: "Thông tin chi tiết về Tòa D3..." },
+      toaD5: { name: "Tòa D5", detail: "Thông tin chi tiết về Tòa D5..." },
+      toaD35: { name: "Khối nhà D3-D5", detail: "Thông tin chi tiết về Khối nhà D3-D5..." },
+      toaB6: { name: "Tòa B6", detail: "Thông tin chi tiết về Tòa B6..." },
+      toaB7: { name: "Tòa B7", detail: "Thông tin chi tiết về Tòa B7..." },
+      toaB8: { name: "Tòa B8", detail: "Thông tin chi tiết về Tòa B8..." },
+      toaB5: { name: "Tòa B5", detail: "Thông tin chi tiết về Tòa B5..." },
+      toaB9: { name: "Tòa B9", detail: "Thông tin chi tiết về Tòa B9..." },
+      toaD4: { name: "Tòa D4", detail: "Thông tin chi tiết về Tòa D4..." },
+      toaVuonhoa: { name: "Vườn hoa", detail: "Thông tin chi tiết về Vườn hoa..." },
+      toaD7: { name: "Tòa D7", detail: "Thông tin chi tiết về Tòa D7..." }
+    };
+    function displayBuildingInfo(data, buildingId) {
+        if (data) {
+            infoPanel.innerHTML = `<h3>${data.name}</h3><p>${data.detail}</p>`;
+        } else {
+            infoPanel.innerHTML = `<h3>Thông tin tòa nhà</h3><p class="placeholder">Chưa có thông tin chi tiết cho khu vực này (ID: ${buildingId}).</p>`;
+        }
+    }
+    document.querySelectorAll('.building-rect').forEach(el => {
+        el.addEventListener('click', (event) => {
+            // Logic phát hiện tap cho touch đã xử lý ở touchend.
+            // Sự kiện click này chủ yếu cho desktop.
+            // Cần đảm bảo không bị kích hoạt bởi kết thúc của một cử chỉ pan.
+            const timeSinceTapStart = Date.now() - tapStart.time;
+            const distMoved = Math.sqrt(Math.pow(event.clientX - tapStart.x, 2) + Math.pow(event.clientY - tapStart.y, 2));
+
+            if (isPinching || (isPointerDown && (timeSinceTapStart > TAP_THRESHOLD_MS || distMoved > TAP_MOVE_THRESHOLD_PX )) ){
+                 // Nếu đang pinch, hoặc nếu pointer down và nó là một drag chứ không phải tap nhanh
+                return;
+            }
+            
+            const buildingId = event.target.id;
+            if (buildingId && info[buildingId]) {
+                isPointerDown = false; 
+                campusMap.classList.remove('grabbing');
+                displayBuildingInfo(info[buildingId], buildingId);
+            }
+        });
+    });
+  </script>
+
+</body>
+</html>
