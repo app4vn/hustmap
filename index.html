@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Bản đồ khuôn viên - Tìm Kiếm Nâng Cao</title>
+  <title>Bản đồ khuôn viên - Tìm Kiếm & Zoom Thông Minh</title>
   <style>
     body {
       margin: 0;
@@ -29,8 +29,8 @@
       box-shadow: 0 1px 3px rgba(0,0,0,0.1);
       margin-bottom: 8px;
       box-sizing: border-box;
-      position: relative; /* For positioning search results */
-      z-index: 1000; /* Để search results nổi lên trên */
+      position: relative; 
+      z-index: 1000; 
     }
     #searchInput {
       width: 100%;
@@ -42,8 +42,8 @@
     }
     #searchResultsContainer {
       position: absolute;
-      top: 100%; /* Ngay dưới ô input */
-      left: 8px; /* Căn lề với padding của search-area-container */
+      top: 100%; 
+      left: 8px; 
       right: 8px;
       background-color: white;
       border: 1px solid #ccc;
@@ -51,8 +51,8 @@
       border-radius: 0 0 4px 4px;
       max-height: 200px;
       overflow-y: auto;
-      z-index: 999; /* Dưới search input một chút nhưng trên map */
-      display: none; /* Ẩn mặc định */
+      z-index: 999; 
+      display: none; 
     }
     #searchResultsContainer ul {
       list-style: none;
@@ -103,24 +103,15 @@
       pointer-events: all;
       stroke: rgba(255, 0, 0, 0.6);
       stroke-width: 1px; 
-      transition: stroke 0.3s ease, stroke-width 0.3s ease; /* Animation cho highlight */
+      transition: stroke 0.3s ease, stroke-width 0.3s ease; 
     }
     rect.building-rect.search-highlight {
-        stroke: #00ff00; /* Màu xanh lá cây sáng cho highlight */
+        stroke: #00dd00; /* Màu xanh lá cây sáng cho highlight */
         stroke-width: 3px;
     }
 
-    .divider-line { /* Giữ nguyên */ }
-    
-    .info-panel { /* Giữ nguyên */ }
-    .bottom-controls-container { /* Giữ nguyên */ }
-    .quadrant-grid-controls { /* Giữ nguyên */ }
-    .quadrant-grid-controls button,
-    .bottom-controls-container button.reset-zoom { /* Giữ nguyên */ }
-
-    /* Style còn lại giữ nguyên như bản trước */
     .divider-line { stroke: rgba(128, 128, 128, 0.4); stroke-width: 1px; stroke-dasharray: 3,3; pointer-events: none;}
-    .info-panel { width: 100%; max-width: 900px; padding: 10px; background: #fff; border: 1px solid #ccc; box-sizing: border-box; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); flex-shrink: 0; max-height: 20vh; overflow-y: auto; margin-bottom: 8px; }
+    .info-panel { width: 100%; max-width: 900px; padding: 10px; background: #fff; border: 1px solid #ccc; box-sizing: border-box; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); flex-shrink: 0; max-height: 18vh; overflow-y: auto; margin-bottom: 8px; }
     .info-panel h3 { margin-top: 0; color: #007bff; font-size: 1.1em; }
     .info-panel p { margin: 5px 0 0; line-height: 1.4; color: #333; font-size: 0.9em; }
     .placeholder { color: #999; font-style: italic; }
@@ -207,6 +198,8 @@
 
     const SVG_ORIGINAL_WIDTH = 970;
     const SVG_ORIGINAL_HEIGHT = 910;
+    const SVG_ASPECT_RATIO = SVG_ORIGINAL_WIDTH / SVG_ORIGINAL_HEIGHT;
+
     let currentViewBox = { x: 0, y: 0, width: SVG_ORIGINAL_WIDTH, height: SVG_ORIGINAL_HEIGHT };
     const ZOOM_FACTOR = 1.2; 
     const MIN_ZOOM_WIDTH = 30; 
@@ -220,30 +213,49 @@
     let tapStart = { x:0, y:0, time:0 };
     const TAP_THRESHOLD_MS = 250;
     const TAP_MOVE_THRESHOLD_PX = 10;
+    
     let debounceTimer;
     let highlightTimeout;
+    let autoZoomOutTimer = null;
+    let isAnimatingViewBox = false;
+    let animationFrameId = null;
+
 
     const halfWidth = SVG_ORIGINAL_WIDTH / 2;
     const halfHeight = SVG_ORIGINAL_HEIGHT / 2;
-    const quadrantViewBoxes = { /* giữ nguyên */ };
-    // ... (Copy quadrantViewBoxes từ bản trước)
-    quadrantViewBoxes.q1 = { x: 0, y: 0, width: halfWidth, height: halfHeight };
-    quadrantViewBoxes.q2 = { x: halfWidth, y: 0, width: halfWidth, height: halfHeight };
-    quadrantViewBoxes.q3 = { x: 0, y: halfHeight, width: halfWidth, height: halfHeight };
-    quadrantViewBoxes.q4 = { x: halfWidth, y: halfHeight, width: halfWidth, height: halfHeight };
+    const quadrantViewBoxes = {
+      q1: { x: 0, y: 0, width: halfWidth, height: halfHeight },
+      q2: { x: halfWidth, y: 0, width: halfWidth, height: halfHeight },
+      q3: { x: 0, y: halfHeight, width: halfWidth, height: halfHeight },
+      q4: { x: halfWidth, y: halfHeight, width: halfWidth, height: halfHeight }
+    };
 
+    function cancelAnimationsAndTimers() {
+        clearTimeout(autoZoomOutTimer);
+        if (isAnimatingViewBox) {
+            cancelAnimationFrame(animationFrameId);
+            isAnimatingViewBox = false;
+        }
+    }
 
-    function setMapViewBox(vb) { /* giữ nguyên */ }
-    // ... (Copy setMapViewBox, screenToSVGCoords, zoomViewBox, mouse handlers, touch handlers từ bản trước)
-    // Hàm setMapViewBox
-    function setMapViewBox(vb) {
+    function setMapViewBox(vb, calledFromAnimation = false) {
+      if (!calledFromAnimation) {
+        cancelAnimationsAndTimers();
+      }
+
       currentViewBox = { ...vb };
-      currentViewBox.x = Math.max(-SVG_ORIGINAL_WIDTH * 0.5, Math.min(currentViewBox.x, SVG_ORIGINAL_WIDTH * 1.5 - currentViewBox.width));
-      currentViewBox.y = Math.max(-SVG_ORIGINAL_HEIGHT * 0.5, Math.min(currentViewBox.y, SVG_ORIGINAL_HEIGHT * 1.5 - currentViewBox.height));
+      // Clamp viewBox to prevent excessive panning away from content area
+      const minX = -SVG_ORIGINAL_WIDTH * 0.5; // Allow panning half map width left
+      const maxX = SVG_ORIGINAL_WIDTH; // Original map end X
+      const minY = -SVG_ORIGINAL_HEIGHT * 0.5; // Allow panning half map height up
+      const maxY = SVG_ORIGINAL_HEIGHT; // Original map end Y
+
+      currentViewBox.x = Math.max(minX, Math.min(currentViewBox.x, maxX - currentViewBox.width));
+      currentViewBox.y = Math.max(minY, Math.min(currentViewBox.y, maxY - currentViewBox.height));
+      
       campusMap.setAttribute('viewBox', `${currentViewBox.x} ${currentViewBox.y} ${currentViewBox.width} ${currentViewBox.height}`);
     }
 
-    // Hàm screenToSVGCoords
     function screenToSVGCoords(screenX, screenY) {
         const pt = campusMap.createSVGPoint();
         pt.x = screenX;
@@ -251,21 +263,58 @@
         const CTM = campusMap.getScreenCTM();
         return CTM ? pt.matrixTransform(CTM.inverse()) : null;
     }
+    
+    function easeInOutQuad(t) { 
+      return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    }
 
-    // Hàm zoomViewBox
+    function animateViewBox(targetVb, duration) {
+        cancelAnimationsAndTimers(); // Cancel any previous animations or scheduled zoom-outs
+        isAnimatingViewBox = true;
+
+        const startVb = { ...currentViewBox }; 
+        const startTime = performance.now();
+
+        function animationStep(currentTime) {
+            if (!isAnimatingViewBox) return; 
+
+            const elapsedTime = currentTime - startTime;
+            let progress = Math.min(elapsedTime / duration, 1);
+            const easedProgress = easeInOutQuad(progress);
+
+            const interpolatedVb = {
+                x: startVb.x + (targetVb.x - startVb.x) * easedProgress,
+                y: startVb.y + (targetVb.y - startVb.y) * easedProgress,
+                width: startVb.width + (targetVb.width - startVb.width) * easedProgress,
+                height: startVb.height + (targetVb.height - startVb.height) * easedProgress,
+            };
+            setMapViewBox(interpolatedVb, true); 
+
+            if (progress < 1) {
+                animationFrameId = requestAnimationFrame(animationStep);
+            } else {
+                isAnimatingViewBox = false;
+                setMapViewBox(targetVb); 
+            }
+        }
+        animationFrameId = requestAnimationFrame(animationStep);
+    }
+
+
     function zoomViewBox(zoomRatio, pivotSVG) {
+        cancelAnimationsAndTimers();
         let newWidth = currentViewBox.width * zoomRatio;
         let newHeight = currentViewBox.height * zoomRatio;
 
         if (newWidth < MIN_ZOOM_WIDTH) {
             newWidth = MIN_ZOOM_WIDTH;
-            newHeight = MIN_ZOOM_WIDTH * (SVG_ORIGINAL_HEIGHT / SVG_ORIGINAL_WIDTH);
-            if (zoomRatio > 1 && currentViewBox.width <= MIN_ZOOM_WIDTH) return; // Đã ở mức zoom nhỏ nhất, không zoom out nữa
+            newHeight = newWidth / SVG_ASPECT_RATIO;
+            if (zoomRatio > 1 && currentViewBox.width <= MIN_ZOOM_WIDTH) return;
         }
         if (newWidth > MAX_ZOOM_WIDTH) {
             newWidth = MAX_ZOOM_WIDTH;
-            newHeight = MAX_ZOOM_WIDTH * (SVG_ORIGINAL_HEIGHT / SVG_ORIGINAL_WIDTH);
-             if (zoomRatio < 1 && currentViewBox.width >= MAX_ZOOM_WIDTH) return; // Đã ở mức zoom lớn nhất, không zoom in nữa
+            newHeight = newWidth / SVG_ASPECT_RATIO;
+             if (zoomRatio < 1 && currentViewBox.width >= MAX_ZOOM_WIDTH) return;
         }
         
         let newX, newY;
@@ -278,10 +327,11 @@
         }
         setMapViewBox({ x: newX, y: newY, width: newWidth, height: newHeight });
     }
-
-    // Mouse Event Handlers
+    
+    // --- Mouse Event Handlers ---
     campusMap.addEventListener('mousedown', (event) => {
-        if (event.button !== 0) return; // Chỉ xử lý chuột trái
+        cancelAnimationsAndTimers();
+        if (event.button !== 0) return; 
         isPointerDown = true;
         pointerStartCoords = { x: event.clientX, y: event.clientY };
         viewBoxOnPointerDown = { x: currentViewBox.x, y: currentViewBox.y };
@@ -289,7 +339,7 @@
         tapStart = { x: event.clientX, y: event.clientY, time: Date.now() };
     });
     campusMap.addEventListener('mousemove', (event) => {
-        if (!isPointerDown || isPinching) return;
+        if (!isPointerDown || isPinching || isAnimatingViewBox) return; // Không pan khi đang pinch hoặc animating
         const dxScreen = event.clientX - pointerStartCoords.x;
         const dyScreen = event.clientY - pointerStartCoords.y;
         const clientRect = campusMap.getBoundingClientRect();
@@ -311,17 +361,20 @@
     window.addEventListener('blur', stopPointerInteractionsMouse); 
 
     campusMap.addEventListener('wheel', (event) => {
-      event.preventDefault();
+      event.preventDefault(); // Luôn preventDefault cho wheel
+      cancelAnimationsAndTimers();
       const pivot = screenToSVGCoords(event.clientX, event.clientY);
       if (!pivot) return;
       const zoomRatio = event.deltaY < 0 ? (1 / ZOOM_FACTOR) : ZOOM_FACTOR;
       zoomViewBox(zoomRatio, pivot);
     });
 
-    // Touch Event Handlers
-    function getTouchDistance(touch1, touch2) { /* giữ nguyên */ return Math.sqrt(Math.pow(touch1.clientX - touch2.clientX,2) + Math.pow(touch1.clientY - touch2.clientY,2));}
-    function getTouchMidpoint(touch1, touch2) { /* giữ nguyên */ return {x:(touch1.clientX+touch2.clientX)/2, y:(touch1.clientY+touch2.clientY)/2};}
+    // --- Touch Event Handlers ---
+    function getTouchDistance(touch1, touch2) { return Math.sqrt(Math.pow(touch1.clientX - touch2.clientX,2) + Math.pow(touch1.clientY - touch2.clientY,2));}
+    function getTouchMidpoint(touch1, touch2) { return {x:(touch1.clientX+touch2.clientX)/2, y:(touch1.clientY+touch2.clientY)/2};}
+    
     campusMap.addEventListener('touchstart', (event) => {
+        cancelAnimationsAndTimers();
         event.preventDefault();
         isPointerDown = true; 
         campusMap.classList.add('grabbing');
@@ -337,28 +390,29 @@
             viewBoxOnPointerDown = { ...currentViewBox }; 
         }
     }, { passive: false });
+
     campusMap.addEventListener('touchmove', (event) => {
         event.preventDefault();
-        if (!isPointerDown) return;
+        if (!isPointerDown || isAnimatingViewBox) return; // Không làm gì nếu đang animating
+
         if (isPinching && event.touches.length === 2) {
             const currentPinchDistance = getTouchDistance(event.touches[0], event.touches[1]);
-            if (initialPinchDistance < 1) { // Tránh chia cho 0 hoặc giá trị quá nhỏ
-                initialPinchDistance = currentPinchDistance; // Reset nếu khoảng cách ban đầu không hợp lệ
-                viewBoxOnPointerDown = { ...currentViewBox }; // Cập nhật lại viewBox tham chiếu
+            if (initialPinchDistance < 1) { 
+                initialPinchDistance = currentPinchDistance; 
+                viewBoxOnPointerDown = { ...currentViewBox }; 
                 return;
             }
             const zoomRatio = currentPinchDistance / initialPinchDistance;
             const screenMidpoint = getTouchMidpoint(event.touches[0], event.touches[1]);
             const svgMidpoint = screenToSVGCoords(screenMidpoint.x, screenMidpoint.y);
             if (svgMidpoint) {
-                const newWidth = viewBoxOnPointerDown.width / zoomRatio;
-                const newHeight = viewBoxOnPointerDown.height / zoomRatio;
-                let finalWidth = Math.max(MIN_ZOOM_WIDTH, Math.min(newWidth, MAX_ZOOM_WIDTH));
-                let finalHeight = finalWidth * (SVG_ORIGINAL_HEIGHT / SVG_ORIGINAL_WIDTH);
-                // Điều chỉnh lại X, Y dựa trên pivot và width/height đã bị giới hạn
-                let newViewBoxX = svgMidpoint.x - (svgMidpoint.x - viewBoxOnPointerDown.x) * (finalWidth / viewBoxOnPointerDown.width);
-                let newViewBoxY = svgMidpoint.y - (svgMidpoint.y - viewBoxOnPointerDown.y) * (finalHeight / viewBoxOnPointerDown.height);
-                setMapViewBox({x: newViewBoxX, y: newViewBoxY, width: finalWidth, height: finalHeight});
+                let newWidth = viewBoxOnPointerDown.width / zoomRatio;
+                newWidth = Math.max(MIN_ZOOM_WIDTH, Math.min(newWidth, MAX_ZOOM_WIDTH));
+                let newHeight = newWidth / SVG_ASPECT_RATIO;
+                
+                let newViewBoxX = svgMidpoint.x - (svgMidpoint.x - viewBoxOnPointerDown.x) * (newWidth / viewBoxOnPointerDown.width);
+                let newViewBoxY = svgMidpoint.y - (svgMidpoint.y - viewBoxOnPointerDown.y) * (newHeight / viewBoxOnPointerDown.height);
+                setMapViewBox({x: newViewBoxX, y: newViewBoxY, width: newWidth, height: newHeight});
             }
         } else if (!isPinching && event.touches.length === 1) {
             const touch = event.touches[0];
@@ -373,18 +427,23 @@
             setMapViewBox({ x: newX, y: newY, width: currentViewBox.width, height: currentViewBox.height });
         }
     }, { passive: false });
+
     campusMap.addEventListener('touchend', (event) => {
-        if (!isPinching && event.changedTouches.length === 1 && isPointerDown) {
+        if (!isPinching && event.changedTouches.length === 1 && isPointerDown && !isAnimatingViewBox) {
             const touch = event.changedTouches[0];
             const timeElapsed = Date.now() - tapStart.time;
             const distMoved = Math.sqrt(Math.pow(touch.clientX - tapStart.x, 2) + Math.pow(touch.clientY - tapStart.y, 2));
             if (timeElapsed < TAP_THRESHOLD_MS && distMoved < TAP_MOVE_THRESHOLD_PX) {
                 let targetElement = document.elementFromPoint(tapStart.x, tapStart.y);
-                if (targetElement && targetElement.closest && targetElement.closest('.building-rect')) {
+                if (targetElement && targetElement.closest && targetElement.closest('.building-rect')) { 
                     targetElement = targetElement.closest('.building-rect');
                     const buildingId = targetElement.id;
                     if (buildingId && info[buildingId]) {
+                        cancelAnimationsAndTimers(); // Hủy animation nếu có trước khi hiển thị info
                         displayBuildingInfo(info[buildingId], buildingId);
+                        // Đóng danh sách kết quả tìm kiếm nếu đang mở
+                        searchResultsContainer.style.display = 'none';
+                        searchInput.value = ''; 
                     }
                 }
             }
@@ -401,10 +460,10 @@
         isPointerDown = false;
         isPinching = false;
         campusMap.classList.remove('grabbing');
+        cancelAnimationsAndTimers();
     });
 
-
-    // --- New Button Click Handlers ---
+    // --- Button Click Handlers ---
     document.getElementById('zoomQ1Bottom').addEventListener('click', () => setMapViewBox(quadrantViewBoxes.q1));
     document.getElementById('zoomQ2Bottom').addEventListener('click', () => setMapViewBox(quadrantViewBoxes.q2));
     document.getElementById('zoomQ3Bottom').addEventListener('click', () => setMapViewBox(quadrantViewBoxes.q3));
@@ -414,45 +473,43 @@
     });
 
     // --- Building Info and Click Logic ---
-    const info = { /* giữ nguyên */ };
-    // ... (Copy object 'info' từ bản trước)
-    info.toaC1 = { name: "Tòa C1", detail: "Trung tâm hành chính và các phòng ban quản lý chính của trường." };
-    info.toaC2 = { name: "Tòa C2", detail: "Gồm hội trường lớn, phòng thí nghiệm vật liệu, công nghệ thông tin." };
-    info.toaC7 = { name: "Tòa C7", detail: "Viện Kinh tế & Quản lý, trung tâm đào tạo quản trị." };
-    info.toaB1 = { name: "Tòa B1", detail: "Trường Hóa học và Khoa học Sự sống, các phòng thí nghiệm sinh học." };
-    info.toaKtx = { name: "Ký túc xá", detail: "Ký túc xá sinh viên với hơn 500 chỗ ở." };
-    info.toaC9 = { name: "Tòa C9", detail: "Thông tin chi tiết về Tòa C9..." };
-    info.toaHoithao = { name: "Khu Hội thảo", detail: "Thông tin chi tiết về Khu Hội thảo..." };
-    info.toaC3 = { name: "Tòa C3", detail: "Thông tin chi tiết về Tòa C3..." };
-    info.toaC4 = { name: "Tòa C4", detail: "Thông tin chi tiết về Tòa C4..." };
-    info.toaC5 = { name: "Tòa C5", detail: "Thông tin chi tiết về Tòa C5..." };
-    info.toaC10 = { name: "Tòa C10", detail: "Thông tin chi tiết về Tòa C10..." };
-    info.toaThuvien = { name: "Thư viện", detail: "Thông tin chi tiết về Thư viện..." };
-    info.toaHotien = { name: "Hồ Tiền", detail: "Thông tin chi tiết về Hồ Tiền..." };
-    info.toaD6 = { name: "Tòa D6", detail: "Thông tin chi tiết về Tòa D6..." };
-    info.toaD8 = { name: "Tòa D8", detail: "Thông tin chi tiết về Tòa D8..." };
-    info.toaD2a = { name: "Tòa D2a", detail: "Thông tin chi tiết về Tòa D2a..." };
-    info.toaD2b = { name: "Tòa D2b", detail: "Thông tin chi tiết về Tòa D2b..." };
-    info.toaVietduc = { name: "Trung tâm Việt Đức", detail: "Thông tin chi tiết về Trung tâm Việt Đức..." };
-    info.toaD2d = { name: "Tòa D2d", detail: "Thông tin chi tiết về Tòa D2d..." };
-    info.toaC3b = { name: "Tòa C3b", detail: "Thông tin chi tiết về Tòa C3b..." };
-    info.toaC1b = { name: "Tòa C1b", detail: "Thông tin chi tiết về Tòa C1b..." };
-    info.toaD3 = { name: "Tòa D3", detail: "Thông tin chi tiết về Tòa D3..." };
-    info.toaD5 = { name: "Tòa D5", detail: "Thông tin chi tiết về Tòa D5..." };
-    info.toaD35 = { name: "Khối nhà D3-D5", detail: "Thông tin chi tiết về Khối nhà D3-D5..." };
-    info.toaB6 = { name: "Tòa B6", detail: "Thông tin chi tiết về Tòa B6..." };
-    info.toaB7 = { name: "Tòa B7", detail: "Thông tin chi tiết về Tòa B7..." };
-    info.toaB8 = { name: "Tòa B8", detail: "Thông tin chi tiết về Tòa B8..." };
-    info.toaB5 = { name: "Tòa B5", detail: "Thông tin chi tiết về Tòa B5..." };
-    info.toaB9 = { name: "Tòa B9", detail: "Thông tin chi tiết về Tòa B9..." };
-    info.toaD4 = { name: "Tòa D4", detail: "Thông tin chi tiết về Tòa D4..." };
-    info.toaVuonhoa = { name: "Vườn hoa", detail: "Thông tin chi tiết về Vườn hoa..." };
-    info.toaD7 = { name: "Tòa D7", detail: "Thông tin chi tiết về Tòa D7..." };
-
-
-    function displayBuildingInfo(data, buildingId) { /* giữ nguyên */ }
-     // Hàm displayBuildingInfo
+    const info = {
+      toaC1: { name: "Tòa C1", detail: "Trung tâm hành chính và các phòng ban quản lý chính của trường." },
+      toaC2: { name: "Tòa C2", detail: "Gồm hội trường lớn, phòng thí nghiệm vật liệu, công nghệ thông tin." },
+      toaC7: { name: "Tòa C7", detail: "Viện Kinh tế & Quản lý, trung tâm đào tạo quản trị." },
+      toaB1: { name: "Tòa B1", detail: "Trường Hóa học và Khoa học Sự sống, các phòng thí nghiệm sinh học." },
+      toaKtx: { name: "Ký túc xá", detail: "Ký túc xá sinh viên với hơn 500 chỗ ở." },
+      toaC9: { name: "Tòa C9", detail: "Thông tin chi tiết về Tòa C9..." },
+      toaHoithao: { name: "Khu Hội thảo", detail: "Thông tin chi tiết về Khu Hội thảo..." },
+      toaC3: { name: "Tòa C3", detail: "Thông tin chi tiết về Tòa C3..." },
+      toaC4: { name: "Tòa C4", detail: "Thông tin chi tiết về Tòa C4..." },
+      toaC5: { name: "Tòa C5", detail: "Thông tin chi tiết về Tòa C5..." },
+      toaC10: { name: "Tòa C10", detail: "Thông tin chi tiết về Tòa C10..." },
+      toaThuvien: { name: "Thư viện", detail: "Thông tin chi tiết về Thư viện..." },
+      toaHotien: { name: "Hồ Tiền", detail: "Thông tin chi tiết về Hồ Tiền..." },
+      toaD6: { name: "Tòa D6", detail: "Thông tin chi tiết về Tòa D6..." },
+      toaD8: { name: "Tòa D8", detail: "Thông tin chi tiết về Tòa D8..." },
+      toaD2a: { name: "Tòa D2a", detail: "Thông tin chi tiết về Tòa D2a..." },
+      toaD2b: { name: "Tòa D2b", detail: "Thông tin chi tiết về Tòa D2b..." },
+      toaVietduc: { name: "Trung tâm Việt Đức", detail: "Thông tin chi tiết về Trung tâm Việt Đức..." },
+      toaD2d: { name: "Tòa D2d", detail: "Thông tin chi tiết về Tòa D2d..." },
+      toaC3b: { name: "Tòa C3b", detail: "Thông tin chi tiết về Tòa C3b..." },
+      toaC1b: { name: "Tòa C1b", detail: "Thông tin chi tiết về Tòa C1b..." },
+      toaD3: { name: "Tòa D3", detail: "Thông tin chi tiết về Tòa D3..." },
+      toaD5: { name: "Tòa D5", detail: "Thông tin chi tiết về Tòa D5..." },
+      toaD35: { name: "Khối nhà D3-D5", detail: "Thông tin chi tiết về Khối nhà D3-D5..." },
+      toaB6: { name: "Tòa B6", detail: "Thông tin chi tiết về Tòa B6..." },
+      toaB7: { name: "Tòa B7", detail: "Thông tin chi tiết về Tòa B7..." },
+      toaB8: { name: "Tòa B8", detail: "Thông tin chi tiết về Tòa B8..." },
+      toaB5: { name: "Tòa B5", detail: "Thông tin chi tiết về Tòa B5..." },
+      toaB9: { name: "Tòa B9", detail: "Thông tin chi tiết về Tòa B9..." },
+      toaD4: { name: "Tòa D4", detail: "Thông tin chi tiết về Tòa D4..." },
+      toaVuonhoa: { name: "Vườn hoa", detail: "Thông tin chi tiết về Vườn hoa..." },
+      toaD7: { name: "Tòa D7", detail: "Thông tin chi tiết về Tòa D7..." }
+    };
+    
     function displayBuildingInfo(data, buildingId) {
+        clearSearchHighlight(); // Xóa highlight nếu có khi hiển thị thông tin tòa nhà
         if (data) {
             infoPanel.innerHTML = `<h3>${data.name}</h3><p>${data.detail}</p>`;
         } else {
@@ -460,12 +517,12 @@
         }
     }
     
-    document.querySelectorAll('.building-rect').forEach(el => { /* giữ nguyên */ });
-    // Gắn sự kiện click cho các tòa nhà (chủ yếu cho desktop)
     document.querySelectorAll('.building-rect').forEach(el => {
         el.addEventListener('click', (event) => {
             const timeSinceTapStart = Date.now() - tapStart.time;
-            const distMoved = Math.sqrt(Math.pow(event.clientX - tapStart.x, 2) + Math.pow(event.clientY - tapStart.y, 2));
+            const clientX = (event.touches && event.touches[0]) ? event.touches[0].clientX : event.clientX;
+            const clientY = (event.touches && event.touches[0]) ? event.touches[0].clientY : event.clientY;
+            const distMoved = Math.sqrt(Math.pow(clientX - tapStart.x, 2) + Math.pow(clientY - tapStart.y, 2));
 
             if (isPinching || (isPointerDown && (timeSinceTapStart > TAP_THRESHOLD_MS || distMoved > TAP_MOVE_THRESHOLD_PX )) ){
                 return;
@@ -473,25 +530,23 @@
             
             const buildingId = event.target.id;
             if (buildingId && info[buildingId]) {
-                clearSearchHighlight(); // Xóa highlight từ search nếu có
+                cancelAnimationsAndTimers();
                 isPointerDown = false; 
                 campusMap.classList.remove('grabbing');
                 displayBuildingInfo(info[buildingId], buildingId);
-                // Đóng danh sách kết quả tìm kiếm nếu đang mở
                 searchResultsContainer.style.display = 'none';
-                searchInput.value = ''; // Xóa ô tìm kiếm
+                searchInput.value = ''; 
             }
         });
     });
-
 
     // --- SEARCH FUNCTIONALITY ---
     function normalizeString(str) {
       if (!str) return '';
       return str.toLowerCase()
-          .normalize("NFD") // Tách dấu và chữ cái
-          .replace(/[\u0300-\u036f]/g, "") // Bỏ các dấu thanh, dấu mũ, ...
-          .replace(/đ/g, "d"); // Chuyển đổi 'đ' thành 'd'
+          .normalize("NFD") 
+          .replace(/[\u0300-\u036f]/g, "") 
+          .replace(/đ/g, "d"); 
     }
 
     function debounce(func, delay) {
@@ -511,10 +566,11 @@
     }
 
     function performSearch() {
+      cancelAnimationsAndTimers(); // Hủy animation nếu đang tìm kiếm
       clearSearchHighlight();
       const query = searchInput.value;
       const normalizedQuery = normalizeString(query);
-      searchResultsList.innerHTML = ''; // Xóa kết quả cũ
+      searchResultsList.innerHTML = ''; 
 
       if (!query.trim()) {
         searchResultsContainer.style.display = 'none';
@@ -531,13 +587,12 @@
           matches.push({ id, ...building });
         }
       }
-
-      matches.sort((a, b) => a.name.localeCompare(b.name, 'vi')); // Sắp xếp theo Tiếng Việt
+      matches.sort((a, b) => a.name.localeCompare(b.name, 'vi')); 
 
       if (matches.length > 0) {
-        matches.slice(0, 7).forEach(building => { // Hiển thị tối đa 7 kết quả
+        matches.slice(0, 7).forEach(building => { 
           const li = document.createElement('li');
-          li.textContent = building.name + (building.id !== building.name.toLowerCase().replace(/\s+/g,'') ? ` (${building.id})` : ''); // Hiển thị ID nếu khác tên
+          li.textContent = building.name + (normalizeString(building.id) !== normalizeString(building.name).replace(/\s+/g,'') ? ` (${building.id.toUpperCase()})` : '');
           li.dataset.buildingId = building.id;
           li.addEventListener('click', () => handleSearchResultClick(building.id));
           searchResultsList.appendChild(li);
@@ -550,72 +605,88 @@
     }
 
     function handleSearchResultClick(buildingId) {
+      cancelAnimationsAndTimers();
       clearSearchHighlight();
+      
       const buildingData = info[buildingId];
       const buildingRectEl = document.getElementById(buildingId);
 
       if (buildingData && buildingRectEl) {
-        // 1. Pan & Zoom
-        const rectCoords = buildingRectEl.getBBox(); // Lấy tọa độ và kích thước thực của rect trong SVG space
+        const rectCoords = buildingRectEl.getBBox(); 
         
         let targetViewBoxWidth, targetViewBoxHeight;
-        const aspectRatio = SVG_ORIGINAL_WIDTH / SVG_ORIGINAL_HEIGHT;
         const rectAspectRatio = rectCoords.width / rectCoords.height;
 
-        // Zoom sao cho tòa nhà chiếm khoảng 60% view, giữ tỷ lệ của viewBox
-        if (rectAspectRatio > aspectRatio) { // Tòa nhà rộng hơn so với view
-            targetViewBoxWidth = rectCoords.width / 0.6;
-            targetViewBoxHeight = targetViewBoxWidth / aspectRatio;
-        } else { // Tòa nhà cao hơn hoặc bằng so với view
-            targetViewBoxHeight = rectCoords.height / 0.6;
-            targetViewBoxWidth = targetViewBoxHeight * aspectRatio;
+        if (rectAspectRatio > SVG_ASPECT_RATIO) {
+            targetViewBoxWidth = rectCoords.width / 0.6; 
+            targetViewBoxHeight = targetViewBoxWidth / SVG_ASPECT_RATIO;
+        } else {
+            targetViewBoxHeight = rectCoords.height / 0.6; 
+            targetViewBoxWidth = targetViewBoxHeight * SVG_ASPECT_RATIO;
         }
         
-        // Đảm bảo không zoom quá mức
-        targetViewBoxWidth = Math.max(MIN_ZOOM_WIDTH, Math.min(targetViewBoxWidth, MAX_ZOOM_WIDTH*0.8)); // Giảm max zoom một chút để còn thấy xung quanh
-        targetViewBoxHeight = targetViewBoxWidth / aspectRatio;
+        targetViewBoxWidth = Math.max(MIN_ZOOM_WIDTH * 1.5, Math.min(targetViewBoxWidth, MAX_ZOOM_WIDTH * 0.7));
+        targetViewBoxHeight = targetViewBoxWidth / SVG_ASPECT_RATIO;
 
-
-        const targetX = rectCoords.x + rectCoords.width / 2 - targetViewBoxWidth / 2;
-        const targetY = rectCoords.y + rectCoords.height / 2 - targetViewBoxHeight / 2;
+        const initialZoomX = rectCoords.x + rectCoords.width / 2 - targetViewBoxWidth / 2;
+        const initialZoomY = rectCoords.y + rectCoords.height / 2 - targetViewBoxHeight / 2;
+        const initialZoomViewBox = { x: initialZoomX, y: initialZoomY, width: targetViewBoxWidth, height: targetViewBoxHeight };
         
-        setMapViewBox({ x: targetX, y: targetY, width: targetViewBoxWidth, height: targetViewBoxHeight });
+        setMapViewBox(initialZoomViewBox); // Zoom vào ngay lập tức
 
-        // 2. Highlight Building
         buildingRectEl.classList.add('search-highlight');
         currentHighlightedRect = buildingRectEl;
         highlightTimeout = setTimeout(() => {
             clearSearchHighlight();
-        }, 3000); // Highlight trong 3 giây
+        }, 3000); 
 
-        // 3. Open Info Panel
         displayBuildingInfo(buildingData, buildingId);
-
-        // 4. Clear Search
         searchInput.value = '';
         searchResultsContainer.style.display = 'none';
+
+        autoZoomOutTimer = setTimeout(() => {
+            const focusedVB = { ...currentViewBox }; 
+            const overviewZoomOutFactor = 2.5; 
+
+            let overviewWidth = Math.min(SVG_ORIGINAL_WIDTH, focusedVB.width * overviewZoomOutFactor);
+            let overviewHeight = overviewWidth / SVG_ASPECT_RATIO;
+
+            if (overviewHeight > SVG_ORIGINAL_HEIGHT) {
+                overviewHeight = SVG_ORIGINAL_HEIGHT;
+                overviewWidth = overviewHeight * SVG_ASPECT_RATIO;
+            }
+            
+            if (Math.abs(overviewWidth - focusedVB.width) < 1 && Math.abs(overviewHeight - focusedVB.height) < 1) {
+                 if (focusedVB.width < SVG_ORIGINAL_WIDTH || focusedVB.height < SVG_ORIGINAL_HEIGHT) { // Nếu chưa phải là full view thì zoom ra full
+                    animateViewBox({x:0, y:0, width: SVG_ORIGINAL_WIDTH, height: SVG_ORIGINAL_HEIGHT}, 700);
+                 }
+                return; 
+            }
+
+            const overviewX = focusedVB.x + (focusedVB.width - overviewWidth) / 2;
+            const overviewY = focusedVB.y + (focusedVB.height - overviewHeight) / 2;
+            const targetOverviewViewBox = { x: overviewX, y: overviewY, width: overviewWidth, height: overviewHeight };
+            
+            animateViewBox(targetOverviewViewBox, 700); 
+        }, 2500); 
       }
     }
 
     searchInput.addEventListener('input', debounce(performSearch, 300));
     
-    // Đóng kết quả tìm kiếm khi click ra ngoài
     document.addEventListener('click', function(event) {
         if (!searchInput.contains(event.target) && !searchResultsContainer.contains(event.target)) {
             searchResultsContainer.style.display = 'none';
         }
     });
-    // Đóng kết quả tìm kiếm khi nhấn Escape
     searchInput.addEventListener('keydown', function(event) {
         if (event.key === "Escape") {
             searchInput.value = '';
             searchResultsContainer.style.display = 'none';
-            searchInput.blur(); // Bỏ focus khỏi ô input
+            searchInput.blur(); 
+            cancelAnimationsAndTimers(); // Hủy animation khi nhấn Esc trong ô tìm kiếm
         }
     });
-
-
   </script>
-
 </body>
 </html>
