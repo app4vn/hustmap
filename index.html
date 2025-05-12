@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Bản đồ khuôn viên - Tối giản</title>
+  <title>Bản đồ khuôn viên - Phiên bản ổn định</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -16,11 +16,10 @@
   </div>
 
   <div class="map-container">
-    <svg id="campusMap" viewBox="0 0 970 910" xmlns="http://www.w3.org/2000/svg">
-      <image href="anh-nen-goc.jpg" x="0" y="0" width="970" height="910" />
+    <svg id="campusMap" viewBox="5 5 960 900" xmlns="http://www.w3.org/2000/svg"> <image href="anh-nen-goc.jpg" x="0" y="0" width="970" height="910" />
       <line class="divider-line" x1="485" y1="0" x2="485" y2="910" />
       <line class="divider-line" x1="0" y1="455" x2="970" y2="455" />
-      
+
       <rect class="building-rect" id="toaC2" x="140" y="320" width="40" height="120" />
       <rect class="building-rect" id="toaC9" x="60" y="450" width="130" height="30" />
       <rect class="building-rect" id="toaHoithao" x="140" y="270" width="40" height="40" />
@@ -62,10 +61,25 @@
     </button>
   </div>
 
-  <div class="info-panel" id="infoPanel">
-    <h3>Thông tin tòa nhà</h3>
-    <p class="placeholder">Chạm hoặc tìm kiếm tòa nhà để xem chi tiết.</p>
+  <div id="bottomSheetBackdrop" class="bottom-sheet-backdrop"></div>
+
+  <div id="bottomSheet" class="bottom-sheet">
+    <div class="bottom-sheet-header">
+      <span id="bottomSheetTitle" class="bottom-sheet-title">Thông tin tòa nhà</span>
+      <div class="bottom-sheet-actions"> <button id="toggleBottomSheetHeightBtn" class="bottom-sheet-action-btn toggle-height-btn" aria-label="Mở rộng">
+          <svg class="icon-arrow-up" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6 1.41 1.41z"/></svg>
+          <svg class="icon-arrow-down" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="currentColor" style="display:none;"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+        </button>
+        <button id="closeBottomSheetBtn" class="bottom-sheet-action-btn close-btn" aria-label="Đóng">&times;</button>
+      </div>
+    </div>
+    <div id="bottomSheetContent" class="bottom-sheet-content">
+      <p class="placeholder">Chọn một tòa nhà trên bản đồ hoặc từ kết quả tìm kiếm để xem thông tin chi tiết.</p>
+    </div>
   </div>
+
+  <footer class="app-footer">
+    <p>&copy; 2025 Bản đồ Khuôn viên. Phát triển bởi MinhVTV4.</p> </footer>
 
   <script src="script.js" defer></script>
 </body>
