@@ -7,9 +7,8 @@ body {
   padding: 5px;
   box-sizing: border-box;
   background-color: #f0f0f0;
-  overscroll-behavior: none; 
-  height: 100vh;
-  overflow: hidden;
+  overscroll-behavior: none;
+  min-height: 100vh;
 }
 
 /* --- Search Bar Area --- */
@@ -22,8 +21,9 @@ body {
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   margin-bottom: 8px;
   box-sizing: border-box;
-  position: relative; 
-  z-index: 1000; 
+  position: relative;
+  z-index: 1000;
+  flex-shrink: 0;
 }
 #searchInput {
   width: 100%;
@@ -35,8 +35,8 @@ body {
 }
 #searchResultsContainer {
   position: absolute;
-  top: 100%; 
-  left: 8px; 
+  top: 100%;
+  left: 8px;
   right: 8px;
   background-color: white;
   border: 1px solid #ccc;
@@ -44,8 +44,8 @@ body {
   border-radius: 0 0 4px 4px;
   max-height: 200px;
   overflow-y: auto;
-  z-index: 999; 
-  display: none; 
+  z-index: 999;
+  display: none;
 }
 #searchResultsContainer ul { list-style: none; margin: 0; padding: 0; }
 #searchResultsContainer li { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; }
@@ -58,12 +58,15 @@ body {
   max-width: 900px;
   border: 1px solid #007bff;
   border-radius: 8px;
-  overflow: hidden; /* Quan trọng để icon button không tràn ra ngoài nếu map-container co lại */
+  overflow: hidden;
   background-color: white;
-  flex-grow: 1; 
-  display: flex; /* Giúp SVG co giãn */
-  position: relative; /* Để định vị nút reset zoom icon */
+  height: 55vh; /* Chiều cao cố định */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
   margin-bottom: 8px;
+  box-sizing: border-box;
 }
 
 svg#campusMap {
@@ -79,52 +82,33 @@ svg#campusMap.grabbing { cursor: grabbing; }
 rect.building-rect {
   fill: transparent;
   pointer-events: all;
-  stroke: none; 
-  transition: stroke 0.2s ease-out, stroke-width 0.2s ease-out; 
+  stroke: none;
+  transition: stroke 0.2s ease-out, stroke-width 0.2s ease-out;
 }
 rect.building-rect.search-highlight {
-    stroke: #00cc66 !important; 
-    stroke-width: 3px !important; 
+    stroke: #00e676 !important;
+    stroke-width: 3.5px !important;
 }
 
-.divider-line { 
-  stroke: rgba(128, 128, 128, 0.4); 
-  stroke-width: 1px; 
-  stroke-dasharray: 3,3; 
+.divider-line {
+  stroke: rgba(128, 128, 128, 0.4);
+  stroke-width: 1px;
+  stroke-dasharray: 3,3;
   pointer-events: none;
 }
-.info-panel { 
-  width: 100%; 
-  max-width: 900px; 
-  padding: 10px; 
-  background: #fff; 
-  border: 1px solid #ccc; 
-  box-sizing: border-box; 
-  border-radius: 8px; 
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1); 
-  flex-shrink: 0; 
-  max-height: 18vh; 
-  overflow-y: auto; 
-  margin-bottom: 8px; 
-}
-.info-panel h3 { margin-top: 0; color: #007bff; font-size: 1.1em; }
-.info-panel p { margin: 5px 0 0; line-height: 1.4; color: #333; font-size: 0.9em; }
-.placeholder { color: #999; font-style: italic; }
 
-/* Bỏ CSS cho .bottom-controls-container và .quadrant-grid-controls */
-
-/* CSS cho nút Reset Zoom Icon mới */
+/* --- Reset Zoom Button --- */
 .reset-zoom-icon-btn {
   position: absolute;
   bottom: 10px;
   right: 10px;
-  z-index: 10; /* Nằm trên SVG */
-  background-color: rgba(255, 255, 255, 0.8); /* Nền mờ để không che map quá nhiều */
+  z-index: 10;
+  background-color: rgba(255, 255, 255, 0.8);
   border: 1px solid #ccc;
-  border-radius: 50%; /* Bo tròn */
-  width: 36px; /* Kích thước nút */
+  border-radius: 50%;
+  width: 36px;
   height: 36px;
-  padding: 0; /* Bỏ padding mặc định của button */
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -136,5 +120,144 @@ rect.building-rect.search-highlight {
   background-color: rgba(240, 240, 240, 0.9);
 }
 .reset-zoom-icon-btn svg {
-  fill: #333; /* Màu icon */
+  fill: #333;
+}
+
+/* --- Bottom Sheet Styles --- */
+.bottom-sheet-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.4);
+  z-index: 1010;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease-in-out, visibility 0s linear 0.3s;
+}
+.bottom-sheet-backdrop.open {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.3s ease-in-out, visibility 0s linear 0s;
+}
+
+.bottom-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
+  background-color: #ffffff;
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  box-shadow: 0 -2px 10px rgba(0,0,0,0.15);
+  z-index: 1020;
+  transform: translateY(100%);
+  transition: transform 0.3s ease-in-out, height 0.3s ease-in-out;
+  display: flex;
+  flex-direction: column;
+}
+
+.bottom-sheet.open {
+  transform: translateY(0);
+}
+
+.bottom-sheet-header {
+  display: flex;
+  justify-content: space-between; /* Đẩy title sang trái, actions sang phải */
+  align-items: center;
+  padding: 10px 16px; /* Giảm padding một chút cho cân đối */
+  border-bottom: 1px solid #e0e0e0;
+  flex-shrink: 0;
+}
+
+.bottom-sheet-title {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #333;
+  margin-right: 10px; /* Tạo khoảng cách với cụm nút actions */
+}
+
+.bottom-sheet-actions { /* Nhóm các nút hành động */
+  display: flex;
+  align-items: center;
+  gap: 8px; /* Khoảng cách giữa các nút trong nhóm */
+}
+
+.bottom-sheet-action-btn { /* Style chung cho các nút hành động */
+  background: none;
+  border: none;
+  padding: 6px; /* Tăng vùng chạm cho icon */
+  cursor: pointer;
+  color: #757575; /* Màu mặc định cho icon và text button */
+  display: flex; /* Để căn giữa icon SVG bên trong */
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%; /* Bo tròn nút nếu muốn (tùy chọn) */
+  transition: background-color 0.2s ease;
+}
+.bottom-sheet-action-btn:hover {
+  color: #333; /* Đổi màu icon/text khi hover */
+  background-color: #f0f0f0; /* Thêm nền nhẹ khi hover (tùy chọn) */
+}
+.bottom-sheet-action-btn svg { /* Đảm bảo SVG nhận màu từ button */
+  fill: currentColor; 
+  width: 22px; /* Điều chỉnh kích thước icon nếu cần */
+  height: 22px;
+}
+
+/* Style riêng cho nút đóng dạng text (nếu vẫn dùng) */
+.bottom-sheet-action-btn.close-btn {
+  font-size: 24px; /* Cho ký tự '×' */
+  line-height: 1; /* Đảm bảo ký tự '×' không bị lệch */
+  padding: 4px 8px; /* Điều chỉnh padding riêng cho nút text nếu cần */
+}
+
+/* Icon mặc định là mũi tên lên, mũi tên xuống ẩn */
+.bottom-sheet-action-btn.toggle-height-btn .icon-arrow-down {
+  display: none;
+}
+/* Khi nút có class 'expanded', hiện mũi tên xuống, ẩn mũi tên lên */
+.bottom-sheet-action-btn.toggle-height-btn.expanded .icon-arrow-up {
+  display: none;
+}
+.bottom-sheet-action-btn.toggle-height-btn.expanded .icon-arrow-down {
+  display: block; /* Hoặc inline, tùy thuộc vào cách SVG được đặt */
+}
+
+
+.bottom-sheet-content {
+  padding: 16px;
+  overflow-y: auto;
+  flex-grow: 1;
+}
+
+.bottom-sheet-content .placeholder {
+  color: #999;
+  font-style: italic;
+  text-align: center;
+  margin-top: 20px;
+}
+
+/* --- App Footer Styles --- */
+.app-footer {
+  width: 100%;
+  max-width: 900px;
+  padding: 15px 10px;
+  box-sizing: border-box;
+  text-align: center;
+  font-size: 0.85em;
+  color: #888;
+  margin-top: auto;
+  flex-shrink: 0;
+  border-top: 1px solid #e0e0e0;
+  background-color: #f9f9f9;
+}
+
+.app-footer p {
+  margin: 0;
 }
